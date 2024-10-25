@@ -1,4 +1,4 @@
-# `cluster_msa.py`
+# `cluster-msa`
 
 This script clusters sequences from a multiple sequence alignment (MSA) into distinct groups, each of which is saved as a separate MSA file. Clustering is performed using HDBSCAN, based on Euclidean distances between the sequences in a high-dimensional embedding space.
 
@@ -11,19 +11,19 @@ This script is adapted from [AF-Cluster](https://github.com/HWaymentSteele/AF_Cl
 ## Command-line usage
 
 ```sh
-$ ./cluster_msa.py -h
+$ git clone git@github.com:apcamargo/cluster-msa.git
+$ cd cluster-msa
+$ pixi run cluster-msa -h
 ```
 
-    usage: cluster_msa.py [-h] [--write-tabular-outputs]
-                          [--remove-lowercase-columns]
-                          [--max-gap-sequence MAX_GAP_SEQUENCE]
-                          [--max-gap-column MAX_GAP_COLUMN] [--use-one-hot-encoding]
-                          [--use-hdbscan] [--min-cluster-size MIN_CLUSTER_SIZE]
-                          [--min-samples MIN_SAMPLES] [--min-eps MIN_EPS]
-                          [--max-eps MAX_EPS] [--eps-step EPS_STEP]
-                          [--epsilon-value EPSILON_VALUE]
-                          [--cluster-selection-epsilon CLUSTER_SELECTION_EPSILON]
-                          input output prefix
+    usage: cluster-msa [-h] [--write-tabular-outputs] [--remove-lowercase-columns]
+                      [--max-gap-sequence MAX_GAP_SEQUENCE] [--max-gap-column MAX_GAP_COLUMN]
+                      [--use-one-hot-encoding] [--use-hdbscan]
+                      [--min-cluster-size MIN_CLUSTER_SIZE] [--min-samples MIN_SAMPLES]
+                      [--min-eps MIN_EPS] [--max-eps MAX_EPS] [--eps-step EPS_STEP]
+                      [--set-epsilon-value SET_EPSILON_VALUE]
+                      [--cluster-selection-epsilon CLUSTER_SELECTION_EPSILON]
+                      input output prefix
 
 ### Positional arguments
 
@@ -53,11 +53,19 @@ $ ./cluster_msa.py -h
 
 ## Example
 
+> [!NOTE]
+> This example uses the `esl-reformat` command (which is part of the [HMMER](http://hmmer.org/) package) and [`csvtk`](https://github.com/shenwei356/csvtk). I also suggest using [`alen`](https://github.com/jakobnissen/alen) to visualise the multiple sequence alignments. None of these tools are required to run `cluster-msa`, but you can easily install them to follow this tutorial using [Pixi](https://pixi.sh/):
+> ```sh
+> $ pixi global install -c conda-forge -c bioconda hmmer csvtk alen
+> ```
+
+First, let's download a multiple sequence alignment (MSA) from InterPro and cluster the sequences within it.
+
 ```sh
 # Download the full alignment of the PF01719 family from InterPro and convert it to the FASTA format
 $ curl -LJs https://www.ebi.ac.uk/interpro/wwwapi//entry/pfam/PF01719\?annotation\=alignment:full | gzip -dc | esl-reformat --gapsym="-" afa - > PF01719.afa
 # Cluster the sequences in the MSA and write the output files to the PF01719_clusters directory
-$ ./cluster_msa.py --remove-lowercase-columns --write-tabular-outputs PF01719.afa PF01719_clusters PF01719
+$ pixi run cluster-msa --remove-lowercase-columns --write-tabular-outputs PF01719.afa PF01719_clusters PF01719
 ```
 
 The script will create a directory named `PF01719_clusters` containing the following files:
