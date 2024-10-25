@@ -54,9 +54,9 @@ $ pixi run cluster-msa -h
 ## Example
 
 > [!NOTE]
-> This example uses the `esl-reformat` command (which is part of the [HMMER](http://hmmer.org/) package) and [`csvtk`](https://github.com/shenwei356/csvtk). I also suggest using [`alen`](https://github.com/jakobnissen/alen) to visualise the multiple sequence alignments. None of these tools are required to run `cluster-msa`, but you can easily install them to follow this tutorial using [Pixi](https://pixi.sh/):
+> This example uses the `esl-reformat` command (which is part of the [HMMER](http://hmmer.org/) package), [`csvtk`](https://github.com/shenwei356/csvtk), and [`seqkit`](https://github.com/shenwei356/seqkit). I also suggest using [`alen`](https://github.com/jakobnissen/alen) to visualise the multiple sequence alignments. None of these tools are required to run `cluster-msa`, but you can easily install them to follow this tutorial using [Pixi](https://pixi.sh/):
 > ```sh
-> $ pixi global install -c conda-forge -c bioconda hmmer csvtk alen
+> $ pixi global install -c conda-forge -c bioconda hmmer csvtk seqkit alen
 > ```
 
 First, let's download a multiple sequence alignment (MSA) from InterPro and cluster the sequences within it.
