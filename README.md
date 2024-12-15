@@ -18,7 +18,7 @@ $ pixi run cluster-msa -h
 
     usage: cluster-msa [-h] [--write-tabular-outputs] [--remove-lowercase-columns]
                       [--max-gap-sequence MAX_GAP_SEQUENCE] [--max-gap-column MAX_GAP_COLUMN]
-                      [--use-one-hot-encoding] [--use-hdbscan]
+                      [--use-one-hot-encoding] [--use-hdbscan] [--use-k-medoids USE_K_MEDOIDS]
                       [--min-cluster-size MIN_CLUSTER_SIZE] [--min-samples MIN_SAMPLES]
                       [--min-eps MIN_EPS] [--max-eps MAX_EPS] [--eps-step EPS_STEP]
                       [--set-epsilon-value SET_EPSILON_VALUE]
@@ -43,6 +43,7 @@ $ pixi run cluster-msa -h
 | `--max-gap-column MAX_GAP_COLUMN`                       | Remove columns with gaps representing more than this fraction of the column (after distance computation)                                         | 0.75    |
 | `--use-one-hot-encoding`                                | Use one-hot encoding instead of the BLOSUM62-like embedding                                                                                      | False   |
 | `--use-hdbscan`                                         | Use HDBSCAN instead of DBSCAN                                                                                                                    | False   |
+| `--use-k-medoids USE_K_MEDOIDS`                         | Number of clusters. If set, will use k-medoids instead of DBSCAN.                                                                                | None    |
 | `--min-cluster-size MIN_CLUSTER_SIZE`                   | Minimum cluster size to consider                                                                                                                 | 3       |
 | `--min-samples MIN_SAMPLES`                             | The minimum number of neighbors required for a sequence to be considered a core data point                                                       | 3       |
 | `--min-eps MIN_EPS`                                     | Minimum epsilon value to be considered in the evaluation range (only for DBSCAN)                                                                 | 0.1     |

@@ -13,9 +13,44 @@ from contextlib import contextmanager
 from enum import Enum, auto
 from pathlib import Path
 
+import kmedoids
 import numpy as np
+import rich_click as click
 from polyleven import levenshtein
 from sklearn.cluster import DBSCAN, HDBSCAN
+
+CONTEXT_SETTINGS = dict(help_option_names=["-h", "--help"])
+click.rich_click.OPTION_GROUPS = {
+    "cluster-msa": [
+        {
+            "name": "Output options",
+            "options": ["--write-tabular-outputs"],
+        },
+        {
+            "name": "MSA filtering options",
+            "options": [
+                "--remove-lowercase-columns",
+                "--max-gap-sequence",
+                "--max-gap-column",
+            ],
+        },
+        {
+            "name": "Clustering options",
+            "options": [
+                "--use-one-hot-encoding",
+                "--use-hdbscan",
+                "--use-k-medoids",
+                "--min-cluster-size",
+                "--min-samples",
+                "--min-eps",
+                "--max-eps",
+                "--eps-step",
+                "--set-epsilon-value",
+                "--cluster-selection-epsilon",
+            ],
+        },
+    ]
+}
 
 
 class Compression(Enum):
@@ -109,7 +144,7 @@ def read_fasta(filepath, uppercase=False, strip_n=False, compress=False):
                 break
 
 
-def remove_lowercase_columns(seqs):
+def remove_msa_lowercase_columns(seqs):
     alignment_length = len(seqs[0])
     mask = [True] * alignment_length
     for seq in seqs:
@@ -543,123 +578,130 @@ BL62NP = {
 BL62NP["-"] = np.mean(list(BL62NP.values()), axis=0).tolist()
 
 
-if __name__ == "__main__":
-    p = argparse.ArgumentParser(
-        description="""
-    Cluster sequences in a MSA using HDBSCAN algorithm and write FASTA file for each cluster.
-    """,
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        allow_abbrev=False,
-    )
+@click.command(context_settings=CONTEXT_SETTINGS)
+@click.argument(
+    "input_path", metavar="INPUT", type=click.Path(exists=True), required=True
+)
+@click.argument("output_path", metavar="OUTPUT", type=click.Path(), required=True)
+@click.argument("prefix", metavar="PREFIX", type=str, required=True)
+# Output options
+@click.option(
+    "--write-tabular-outputs",
+    is_flag=True,
+    help="Write tabulars outputs that describe cluster assignments and cluster statistics.",
+)
+# MSA filtering options
+@click.option(
+    "--remove-lowercase-columns",
+    is_flag=True,
+    help="Remove columns with at least one lowercase residue (before distance computation).",
+)
+@click.option(
+    "--max-gap-sequence",
+    default=0.25,
+    type=float,
+    show_default=True,
+    help="Remove sequences with gaps representing more than this fraction of the sequence (before distance computation).",
+)
+@click.option(
+    "--max-gap-column",
+    default=0.75,
+    type=float,
+    show_default=True,
+    help="Remove columns with gaps representing more than this fraction of the column (after distance computation).",
+)
+# Clustering options
+@click.option(
+    "--use-one-hot-encoding",
+    is_flag=True,
+    help="Use one-hot encoding instead of the BLOSUM62-like embedding.",
+)
+@click.option("--use-hdbscan", is_flag=True, help="Use HDBSCAN instead of DBSCAN.")
+@click.option(
+    "--use-k-medoids",
+    type=int,
+    help="Number of clusters. If set, will use k-medoids instead of DBSCAN.",
+)
+@click.option(
+    "--min-cluster-size",
+    default=3,
+    type=int,
+    show_default=True,
+    help="Minimum cluster size to consider.",
+)
+@click.option(
+    "--min-samples",
+    default=3,
+    type=int,
+    show_default=True,
+    help="The minimum number of neighbors required for a sequence to be considered a core data point.",
+)
+@click.option(
+    "--min-eps",
+    default=0.1,
+    type=float,
+    show_default=True,
+    help="Minimum epsilon value to be considered in the evaluation range (only for DBSCAN).",
+)
+@click.option(
+    "--max-eps",
+    default=45,
+    type=float,
+    show_default=True,
+    help="Maximum epsilon value to be considered in the evaluation range (only for DBSCAN).",
+)
+@click.option(
+    "--eps-step",
+    default=0.1,
+    type=float,
+    show_default=True,
+    help="Step size for incrementing epsilon values within the evaluation range (only for DBSCAN).",
+)
+@click.option(
+    "--set-epsilon-value",
+    type=float,
+    help="Set the maximum distance between two sequences for them to be considered neighbors, disabling the automatic epsilon selection (only for DBSCAN).",
+)
+@click.option(
+    "--cluster-selection-epsilon",
+    default=0.0,
+    type=float,
+    show_default=True,
+    help="Clusters with a distance below this threshold will be merged (only for HDBSCAN).",
+)
+def main(
+    input_path,
+    output_path,
+    prefix,
+    write_tabular_outputs,
+    remove_lowercase_columns,
+    max_gap_sequence,
+    max_gap_column,
+    use_one_hot_encoding,
+    use_hdbscan,
+    use_k_medoids,
+    min_cluster_size,
+    min_samples,
+    min_eps,
+    max_eps,
+    eps_step,
+    set_epsilon_value,
+    cluster_selection_epsilon,
+):
+    """
+    Cluster the sequences in a MSA and write a FASTA file for each cluster.
+    """
 
-    p1 = p.add_argument_group("output options")
-    p2 = p.add_argument_group("MSA filtering options")
-    p3 = p.add_argument_group("clustering options")
-    p.add_argument(
-        "input", action="store", help="Multiple sequence alignment (FASTA format)."
-    )
-    p.add_argument("output", action="store", help="Output directory.")
-    p.add_argument("prefix", action="store", help="Prefix for the output files.")
-    p1.add_argument(
-        "--write-tabular-outputs",
-        action="store_true",
-        help="Write tabulars outputs that describe cluster assignments and cluster statistics.",
-    )
-    p2.add_argument(
-        "--remove-lowercase-columns",
-        action="store_true",
-        help="Remove columns with at least one lowercase residue (before distance computation).",
-    )
-    p2.add_argument(
-        "--max-gap-sequence",
-        action="store",
-        default=0.25,
-        type=float,
-        help="Remove sequences with gaps representing more than this fraction of the sequence (before distance computation).",
-    )
-    p2.add_argument(
-        "--max-gap-column",
-        action="store",
-        default=0.75,
-        type=float,
-        help="Remove columns with gaps representing more than this fraction of the column (after distance computation).",
-    )
-    p3.add_argument(
-        "--use-one-hot-encoding",
-        action="store_true",
-        help="Use one-hot encoding instead of the BLOSUM62-like embedding.",
-    )
-    p3.add_argument(
-        "--use-hdbscan",
-        action="store_true",
-        help="Use HDBSCAN instead of DBSCAN.",
-    )
-    p3.add_argument(
-        "--min-cluster-size",
-        action="store",
-        default=3,
-        type=int,
-        help="Minimum cluster size to consider.",
-    )
-    p3.add_argument(
-        "--min-samples",
-        action="store",
-        default=3,
-        type=int,
-        help="The minimum number of neighbors required for a sequence to be considered a core data point.",
-    )
-    p3.add_argument(
-        "--min-eps",
-        action="store",
-        default=0.1,
-        type=float,
-        help="Minimum epsilon value to be considered in the evaluation range (only for DBSCAN).",
-    )
-    p3.add_argument(
-        "--max-eps",
-        action="store",
-        default=45,
-        type=float,
-        help="Maximum epsilon value to be considered in the evaluation range (only for DBSCAN).",
-    )
-    p3.add_argument(
-        "--eps-step",
-        action="store",
-        default=0.1,
-        type=float,
-        help="Step size for incrementing epsilon values within the evaluation range (only for DBSCAN).",
-    )
-    p3.add_argument(
-        "--set-epsilon-value",
-        action="store",
-        type=float,
-        help="Set the maximum distance between two sequences for them to be considered neighbors, disabling the automatic epsilon selection (only for DBSCAN).",
-    )
-    p3.add_argument(
-        "--cluster-selection-epsilon",
-        action="store",
-        default=0.0,
-        type=float,
-        help="Clusters with a distance below this threshold will be merged (only for HDBSCAN).",
-    )
-
-    # Print help if no arguments are provided
-    if len(sys.argv) == 1:
-        p.print_help(sys.stderr)
-        sys.exit(1)
-
-    args = p.parse_args()
-
-    output_dir = pathlib.Path(args.output)
+    output_dir = pathlib.Path(output_path)
     output_dir.mkdir(parents=True, exist_ok=True)
 
     accs, seqs = [], []
-    for seq in read_fasta(args.input):
+    for seq in read_fasta(input_path):
         accs.append(seq.accession)
         seqs.append(seq.seq)
 
-    if args.remove_lowercase_columns:
-        seqs = remove_lowercase_columns(seqs)
+    if remove_lowercase_columns:
+        seqs = remove_msa_lowercase_columns(seqs)
 
     if not len(seqs[0]):
         print(
@@ -675,7 +717,7 @@ if __name__ == "__main__":
     data = [
         {**row, "frac_gaps": row["sequence"].count("-") / aln_len}
         for row in data
-        if row["sequence"].count("-") / aln_len < args.max_gap_sequence
+        if row["sequence"].count("-") / aln_len < max_gap_sequence
     ]
 
     if not data:
@@ -684,34 +726,38 @@ if __name__ == "__main__":
         )
         sys.exit(1)
 
-    if args.use_one_hot_encoding:
+    if use_one_hot_encoding:
         encoded_seqs = encode_seqs_ohe([row["sequence"] for row in data])
     else:
         encoded_seqs = encode_seqs_bl62([row["sequence"] for row in data])
 
-    if args.use_hdbscan:
+    if use_hdbscan:
         clustering = HDBSCAN(
-            min_samples=args.min_samples,
-            cluster_selection_epsilon=args.cluster_selection_epsilon,
+            min_samples=min_samples,
+            cluster_selection_epsilon=cluster_selection_epsilon,
+        ).fit(encoded_seqs)
+    elif use_k_medoids:
+        clustering = kmedoids.KMedoids(
+            use_k_medoids, method="fasterpam", metric="euclidean"
         ).fit(encoded_seqs)
     else:
-        if args.set_epsilon_value:
-            clustering = DBSCAN(
-                min_samples=args.min_samples, eps=args.set_epsilon_value
-            ).fit(encoded_seqs)
+        if set_epsilon_value:
+            clustering = DBSCAN(min_samples=min_samples, eps=set_epsilon_value).fit(
+                encoded_seqs
+            )
         else:
             eps = pick_dbscan_epsilon(
                 encoded_seqs,
-                args.min_samples,
-                args.min_eps,
-                args.max_eps,
-                args.eps_step,
+                min_samples,
+                min_eps,
+                max_eps,
+                eps_step,
             )
-            clustering = DBSCAN(eps=eps, min_samples=args.min_samples).fit(encoded_seqs)
+            clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(encoded_seqs)
 
     cluster_sizes = Counter(clustering.labels_)
     for row, label in zip(data, clustering.labels_):
-        if cluster_sizes[label] < args.min_cluster_size:
+        if cluster_sizes[label] < min_cluster_size:
             label = -1
         row["clustering_label"] = label
     clusters = sorted(
@@ -724,11 +770,11 @@ if __name__ == "__main__":
         write_fasta(
             [row["sequence_name"] for row in cluster_data],
             [row["sequence"] for row in cluster_data],
-            f"{pathlib.Path(args.output) / args.prefix}_cluster_{c}.afa",
-            args.max_gap_column,
+            f"{pathlib.Path(output_path) / prefix}_cluster_{c}.afa",
+            max_gap_column,
         )
 
-        if args.write_tabular_outputs:
+        if write_tabular_outputs:
             cs = get_consensus_seq([row["sequence"] for row in cluster_data])
             avg_dist_to_cs = np.mean(
                 [1 - levenshtein(row["sequence"], cs) / aln_len for row in cluster_data]
@@ -742,9 +788,9 @@ if __name__ == "__main__":
                 }
             )
 
-    if args.write_tabular_outputs:
+    if write_tabular_outputs:
         assignments_outfile = (
-            pathlib.Path(args.output) / f"{args.prefix}_cluster_assignments.tsv"
+            pathlib.Path(output_path) / f"{prefix}_cluster_assignments.tsv"
         )
         with open(assignments_outfile, "w", newline="") as csvfile:
             writer = csv.DictWriter(
@@ -761,7 +807,7 @@ if __name__ == "__main__":
                     }
                 )
 
-        data_outfile = pathlib.Path(args.output) / f"{args.prefix}_cluster_data.tsv"
+        data_outfile = pathlib.Path(output_path) / f"{prefix}_cluster_data.tsv"
         with open(data_outfile, "w", newline="") as csvfile:
             writer = csv.DictWriter(
                 csvfile,
@@ -776,3 +822,7 @@ if __name__ == "__main__":
             writer.writeheader()
             for row in cluster_metadata:
                 writer.writerow(row)
+
+
+if __name__ == "__main__":
+    main()
